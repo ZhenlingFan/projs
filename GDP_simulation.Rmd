@@ -1,0 +1,70 @@
+---
+title: "Zhenling Fan, STAT II Project, 8/9/2018"
+output: html_document
+---
+
+## 1. Introduction
+This project is designed to find the relationship between GDP and the intensity of Nighttime Light(NTL) data, and then using the relationship to simulate GDP in each grid(500m). Because GDP is collected via administrative regions, which is unable to reflect GDP differences within the administrative region. So we can use the prediction of GDP values to achieve the spatialization of GDP.
+
+My study area is 79 counties from five cities in the Pearl River Delta, which are Guangzhou city, Shenzhen city, Foshan city, Dongguan city and Zhongshan city. The GDP data is collected from Guangdong Statistical Yearbook of 2016 (https://gdidd.jnu.edu.cn/doc/gdtjnj/gdtjnj/2016/index.htm). And NTL data is downloaded from NOAA website (https://www.ngdc.noaa.gov/eog/download.html). The sum intensity of NTL of each county is used as the variable for the regression and Arcgis is used to calculate the sum intensity and output it to a csv file.
+
+![Map of GDP in each county and the intensity of NTL](D:/UWM/Stat2/proj2/GDP_NTL.JPG)
+
+To find the relationship, I will use simple linear regression to build the model of GDP and NTL, and use this model to evaluate GDP value in each grid.
+
+## 2. Methods and results
+Read data.
+```{r}
+data = read.csv("D:/UWM/Stat2/proj2/PearlRiverDelta_GDP.csv")
+summary(data$GDP)
+summary(data$sum_NTL)
+
+```
+Make a plot. The plot shows as the intensity of NTL goes up, GDP increases as well. So, it is reasonable to assume that there exists linear relationship between GDP and NTL.
+```{r}
+x = data$sum_NTL
+y = data$GDP
+plot(x = data$sum_NTL, y = data$GDP)
+
+model = lm(data$GDP~data$sum_NTL)
+abline(model)
+summary(model)
+```
+The model shows a linear relationship between GDP and the intensity of NTL, with an estimated intercept $\beta_0 = 883048.7$ and an estimated slope $\beta_1 = 621.2361$. And $R^2 = 0.6108$.
+
+For each coefficient, $H_0:\beta0 = \beta1 = 0$, at the default level $\alpha = 0.05$
+
+p-value of $\beta_0$ = 0.281 > 0.05, so we reject $H_0$.
+
+p-value of $\beta_1$ < 2e-16 < 0.05, so we do not reject $H_0$.
+```{r}
+plot(model$residuals ~ model$fitted.values)
+abline(h=0,col="red")
+
+```
+
+The Residuals plot shows the residuals are scattered around 0 randomly.
+
+```{r}
+#install.packages('rgdal')
+require("rgdal")
+source ="D:/UWM/Stat2/proj2/data/NPP_FiveCities.tif"
+NTL = readGDAL(source)
+
+beta0 = model$coefficients[1]
+beta1 = model$coefficients[2]
+
+GDP.sim = beta0 + beta1 * NTL$band1
+```
+After getting the model, we can use the NTL image as the input varible to calculate the predicted values of GDP in each grid.
+
+## 3. Conclusion
+The regression model is $GDP = 883048.7 + 621.2361 * NTL$, and the predicted GDP distribution is shown as the following map.
+
+![Map of Predicted GDP values](D:/UWM/Stat2/proj2/GDP_SIM.JPG)
+
+The drawback of this prediction is that when we add up the predicted GDP values of all grids in one county, the sum value is not equal to the truth GDP value. So, we have to control the GDP distribution. After we simulating the GDP, we get the predicted values in each grid. If we use the predicted value of this grid divided by the total predicted values of all grid within one county, we can get weights for each grid. Use the weights and the truth GDP values to redistribute GDP to each grid.
+
+The formula is $G_{ij} = TG_{j}\times\frac{PG_{ij}}{TPG_{j}}$ , where $G_{ij}$ represents the GDP value of the i-th grid in j-th county. $TG_{ij}$ represents the truth GDP of j-th county. $PG_{ij}$ represents the predicted GDP values of i-th grid in j-th county. And $TPG_j$ represents the total predicted GDP values of all grids in j-th county.
+
+Via controling the GDP distribution, we can obtain a more accurate prediction of GDP values.
